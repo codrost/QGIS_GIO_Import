@@ -310,12 +310,13 @@ class GIOimport:
                 style_file = None
                 with open(file_name, 'rb', 0) as file, \
                     mmap.mmap(file.fileno(), 0, access=mmap.ACCESS_READ) as s:
-                    if s.find(b'surfaceMember') != -1:
-                        gfs_type = 'Surface'
-                    elif s.find(b'Surface') != -1:
-                        gfs_type = 'Surface'
-                    elif s.find(b'curveMember') != -1:
-                        gfs_type = 'Curve'
+                    if s.find(b'posList') != -1:
+                        if s.find(b'urface') != -1:
+                            gfs_type = 'Surface'
+                        elif s.find(b'olygon') != -1:
+                            gfs_type = 'Surface'
+                        else:
+                            gfs_type = 'Curve'
                     else:
                         gfs_type = 'Point'
                     
