@@ -21,26 +21,39 @@
  *                                                                         *
  ***************************************************************************/
 """
-from qgis.PyQt.QtCore import QSettings, QTranslator, QCoreApplication, QUrl
+import os.path
+import mmap
+import shutil
+
+from qgis.PyQt.QtCore import Qt, QSettings, QTranslator, QCoreApplication, QUrl
 from qgis.PyQt.QtGui import QIcon, QDesktopServices
-from qgis.PyQt.QtWidgets import QAction, QFileDialog, QProgressBar, \
-                                QApplication, QMessageBox
-from qgis.core import Qgis, QgsMessageLog, QgsProject, QgsApplication, \
-                      QgsVectorLayer, QgsLayerDefinition, QgsLayerTreeLayer, \
-                      QgsMapLayerProxyModel
+try:
+    from qgis.PyQt.QtGui import QAction
+except ImportError:
+    from qgis.PyQt.QtWidgets import QAction
+
+from qgis.PyQt.QtWidgets import (
+    QFileDialog,
+    QProgressBar,
+    QApplication,
+    QMessageBox
+)
+from qgis.core import (
+    Qgis,
+    QgsMessageLog,
+    QgsProject,
+    QgsApplication,
+    QgsVectorLayer,
+    QgsLayerDefinition,
+    QgsLayerTreeLayer,
+    QgsMapLayerProxyModel
+)
 
 import lxml
 from lxml import etree
 
-import mmap
-import shutil
-
-
-# Initialize Qt resources from file resources.py
-from .resources import *
 # Import the code for the dialog
 from .gio_import_dialog import GIOimportDialog
-import os.path
 
 
 NAMED_LAYER_WRAPPER = '''
@@ -82,7 +95,7 @@ class GIOimport:
         # initialize plugin directory
         self.plugin_dir = os.path.dirname(__file__)
         # initialize locale
-        locale = QSettings().value('locale/userLocale')[0:2]
+        locale = QSettings().value('locale/userLocale', 'en')[0:2]
         locale_path = os.path.join(
             self.plugin_dir,
             'i18n',
@@ -95,12 +108,11 @@ class GIOimport:
 
         # Declare instance attributes
         self.actions = []
-        self.menu = self.tr(u'&GIO import plugin')
+        self.menu = self.tr('&GIO import plugin')
 
         # Check if plugin was started the first time in current QGIS session
         # Must be set in initGui() to survive plugin reloads
         self.first_start = None
-
 
     # noinspection PyMethodMayBeStatic
     def tr(self, message):
@@ -109,14 +121,13 @@ class GIOimport:
         We implement this ourselves since we do not inherit QObject.
 
         :param message: String for translation.
-        :type message: str, QString
+        :type message: str
 
         :returns: Translated version of message.
-        :rtype: QString
+        :rtype: str
         """
         # noinspection PyTypeChecker,PyArgumentList,PyCallByClass
         return QCoreApplication.translate('GIOimport', message)
-
 
     def add_action(
         self,
@@ -131,8 +142,7 @@ class GIOimport:
         parent=None):
         """Add a toolbar icon to the toolbar.
 
-        :param icon_path: Path to the icon for this action. Can be a resource
-            path (e.g. ':/plugins/foo/bar.png') or a normal file system path.
+        :param icon_path: Path to the icon for this action.
         :type icon_path: str
 
         :param text: Text that should be shown in menu items for this action.
@@ -156,9 +166,6 @@ class GIOimport:
         :param status_tip: Optional text to show in a popup when mouse pointer
             hovers over the action.
         :type status_tip: str
-
-        :param parent: Parent widget for the new action. Defaults None.
-        :type parent: QWidget
 
         :param whats_this: Optional text to show in the status bar when the
             mouse pointer hovers over the action.
@@ -195,44 +202,39 @@ class GIOimport:
     def initGui(self):
         """Create the menu entries and toolbar icons inside the QGIS GUI."""
 
-        icon_path = ':/plugins/gio_import/icon.png'
+        icon_path = os.path.join(self.plugin_dir, 'icon.png')
         self.add_action(
             icon_path,
-            text=self.tr(u'GIO import'),
+            text=self.tr('GIO import'),
             callback=self.run,
             parent=self.iface.mainWindow())
 
         # will be set False in run()
         self.first_start = True
 
-
     def unload(self):
         """Removes the plugin menu item and icon from QGIS GUI."""
         for action in self.actions:
             self.iface.removePluginVectorMenu(
-                self.tr(u'&GIO import plugin'),
+                self.tr('&GIO import plugin'),
                 action)
             self.iface.removeToolBarIcon(action)
-
 
     def chooseFile(self):
         """Reacts on browse button and opens the right file selector dialog"""
 
         fileNames = QFileDialog.getOpenFileNames(
-             caption = self.tr(u"Select GIO .gml and/ or .xml file(s)"), 
-             directory = '', 
-             filter = '*.gml *.xml')
+             caption=self.tr("Select GIO .gml and/ or .xml file(s)"), 
+             directory='', 
+             filter='*.gml *.xml')
         self.fileNames = ';'.join(fileNames[0])
         self.dlg.fileNameBox.setText(self.fileNames)
 
     def showHelp(self):
         """Reacts on help button"""
 
-        #qgis.utils.showPluginHelp(filename = 'help/index')
-        QDesktopServices().openUrl(QUrl.fromLocalFile( \
-            os.path.join("file://", self.plugin_dir, 'help/build/html', \
-                         'index.html')))
-
+        QDesktopServices().openUrl(QUrl.fromLocalFile(
+            os.path.join(self.plugin_dir, 'help', 'build', 'html', 'index.html')))
 
     def run(self):
         """Run method that performs all the real work"""
@@ -250,134 +252,140 @@ class GIOimport:
 
         # show the dialog
         self.dlg.show()
-        # Run the dialog event loop
-        result = self.dlg.exec_()
+        # Run the dialog event loop (supports both Qt5 exec_ and Qt6 exec)
+        result = self.dlg.exec() if hasattr(self.dlg, 'exec') else self.dlg.exec_()
         # See if OK was pressed
         if result:
             
             try:
                 file_names_list = self.fileNames.split(';')
                 number_of_files = len(file_names_list)
-                if not number_of_files:
+                if not number_of_files or not self.fileNames:
                     raise Exception()
-            except:
-                self.iface.messageBar().pushMessage("Error",
-                    self.tr(u'Select at least one file to import.'), 
-                            level = Qgis.Critical)    
+            except Exception:
+                self.iface.messageBar().pushMessage(
+                    "Error",
+                    self.tr('Select at least one file to import.'), 
+                    level=Qgis.MessageLevel.Critical)    
                 return
 
             # set up some user communication
-            QApplication.setOverrideCursor(QtCore.Qt.WaitCursor)
+            wait_cursor = Qt.CursorShape.WaitCursor if hasattr(Qt, 'CursorShape') else Qt.WaitCursor
+            QApplication.setOverrideCursor(wait_cursor)
 
-            self.iface.messageBar().pushMessage("Info",
-                self.tr(u'Start') + ' ' + self.tr(u'Importing GIO files ...'))
-            progressMessageBar = self.iface.messageBar().createMessage( \
-                self.tr(u'Importing GIO files ...'))
+            self.iface.messageBar().pushMessage(
+                "Info",
+                self.tr('Start') + ' ' + self.tr('Importing GIO files ...'),
+                level=Qgis.MessageLevel.Info)
+            progressMessageBar = self.iface.messageBar().createMessage(
+                self.tr('Importing GIO files ...'))
             bar = QProgressBar()
-            bar.setRange(0,0)
-            bar.setAlignment(QtCore.Qt.AlignLeft | QtCore.Qt.AlignVCenter)
+            bar.setRange(0, 0)
+            align_flag = (Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter) if hasattr(Qt, 'AlignmentFlag') else (Qt.AlignLeft | Qt.AlignVCenter)
+            bar.setAlignment(align_flag)
             progressMessageBar.layout().addWidget(bar)
-            self.iface.messageBar().pushWidget(progressMessageBar, Qgis.Info)
+            self.iface.messageBar().pushWidget(progressMessageBar, Qgis.MessageLevel.Info)
 
             count = 0
             self.results = {}
             for file_name in file_names_list:
                 count = count + 1
                 sld = None
-                if file_name[-4:] == '.xml':
+                if file_name.endswith('.xml'):
                     try:
-                        doc  = etree.parse(file_name)
+                        doc = etree.parse(file_name)
                         file_base_name = doc.xpath(
                                 ".//*[local-name() = 'bestandsnaam']")[0].text
                         file_name = os.path.join(os.path.dirname(file_name), 
                                                  file_base_name)
-                    except:
+                    except Exception:
                         self.iface.messageBar().pushMessage(
                             "Error",
-                            "%s: %s" % (self.tr(u'Could not find gml file name in'), 
+                            "%s: %s" % (self.tr('Could not find gml file name in'), 
                                         os.path.basename(file_name)), 
-                            level = Qgis.Warning)
+                            level=Qgis.MessageLevel.Warning)
                         continue
                     sld = doc.xpath(".//*[local-name() = 'FeatureTypeStyle']")
                     if sld:
                         # we support only 1 style
                         sld = sld[0]
 
-                progressMessageBar.setText(self.tr(u"Analyzing file ") + \
-                    str(count) + self.tr(u" from ") + str(number_of_files) + \
+                progressMessageBar.setText(
+                    self.tr("Analyzing file ") + str(count) +
+                    self.tr(" from ") + str(number_of_files) +
                     ": " + os.path.basename(file_name))
 
-                style_file = None
                 with open(file_name, 'rb', 0) as file, \
                     mmap.mmap(file.fileno(), 0, access=mmap.ACCESS_READ) as s:
                     if s.find(b'posList') != -1:
-                        if s.find(b'urface') != -1:
-                            gfs_type = 'Surface'
-                        elif s.find(b'olygon') != -1:
+                        if s.find(b'urface') != -1 or s.find(b'olygon') != -1:
                             gfs_type = 'Surface'
                         else:
                             gfs_type = 'Curve'
                     else:
                         gfs_type = 'Point'
                     
-                shutil.copy(os.path.join(
-                                self.plugin_dir,
-                                'resources','gfs', 'gio-gml-%s.gfs' % gfs_type),
-                            '%s.gfs' % file_name[:-4])
+                shutil.copy(
+                    os.path.join(
+                        self.plugin_dir,
+                        'resources', 'gfs', 'gio-gml-%s.gfs' % gfs_type),
+                    '%s.gfs' % file_name[:-4])
       
                 progressMessageBar.setText(
-                    self.tr(u"Adding file ") + str(count) + self.tr(u" from ") + \
-                    str(number_of_files) + ": " + os.path.basename(file_name))
+                    self.tr("Adding file ") + str(count) +
+                    self.tr(" from ") + str(number_of_files) +
+                    ": " + os.path.basename(file_name))
 
                 vlayer = None
                 try:
                     vlayer = self.iface.addVectorLayer(
-                            file_name,os.path.basename(file_name)[:-4],'ogr')
-                except:
+                        file_name, os.path.basename(file_name)[:-4], 'ogr')
+                except Exception:
                     self.iface.messageBar().pushMessage(
                         "Error",
-                        "%s: %s" %(self.tr(u'Failed to import'),
-                                        os.path.basename(file_name)), 
-                        level = Qgis.Warning) 
-                    QgsMessageLog.logMessage(self.tr(u'Failed to import') + \
-                                str(os.path.basename(file_name)), 'GIOImport')
+                        "%s: %s" % (self.tr('Failed to import'),
+                                    os.path.basename(file_name)), 
+                        level=Qgis.MessageLevel.Warning) 
+                    QgsMessageLog.logMessage(
+                        self.tr('Failed to import') + str(os.path.basename(file_name)),
+                        'GIOImport')
                     QApplication.restoreOverrideCursor()
 
                 if vlayer:
-                    if sld:
+                    if sld is not None:
                         # we kunnen sld uit een string toepassen door eerst 
                         # de featuretypestyle in te lezen uit de GIO
                         # https://gis.stackexchange.com/questions/223912/read-sld-style-in-pyqgis
                         # lukt niet, dus nu maar de SLD wegsaven
                         sld_file = file_name[:-4] + '.sld'  
-                        sld_string = SLD_FILE_WRAPPER % (os.path.basename(file_name),
-                                                         os.path.basename(file_name),
-                                                         etree.tostring(sld).decode("utf-8"))
+                        sld_string = SLD_FILE_WRAPPER % (
+                            os.path.basename(file_name),
+                            os.path.basename(file_name),
+                            etree.tostring(sld).decode("utf-8")
+                        )
                         try:
-                            with open(sld_file,'w') as f:
+                            with open(sld_file, 'w', encoding='utf-8') as f:
                                 f.write(sld_string)
-                        except Exception as v:
+                        except Exception:
                             self.iface.messageBar().pushMessage(
                                 "Error",
-                                "%s: %s" %(self.tr(u'Failed to write style file %s'),
-                                                os.path.basename(sld_file)), 
-                                level = Qgis.Warning)
+                                "%s: %s" % (self.tr('Failed to write style file %s'),
+                                            os.path.basename(sld_file)), 
+                                level=Qgis.MessageLevel.Warning)
                     else:
                         sld_file = os.path.join(
-                                        self.plugin_dir,
-                                        'resources','sld','%s.sld' % 'default')
+                            self.plugin_dir,
+                            'resources', 'sld', '%s.sld' % 'default')
+                    
                     error, succes = vlayer.loadSldStyle(sld_file)
                     if error: 
-                        QgsMessageLog.logMessage(self.tr(u'Error loading style: ') + \
-                                                 str(result), 'GIOImport')
-
+                        QgsMessageLog.logMessage(
+                            self.tr('Error loading style: ') + str(error),
+                            'GIOImport')
 
             # finish the user communication
             QApplication.restoreOverrideCursor()
 
-            progressMessageBar.setText(self.tr(u"Importing GIO files done!"))
-            bar.setRange(0,100)
+            progressMessageBar.setText(self.tr("Importing GIO files done!"))
+            bar.setRange(0, 100)
             bar.setValue(100)
-
-
-

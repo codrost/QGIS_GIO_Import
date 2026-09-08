@@ -4,9 +4,9 @@
 
 [general]
 name=GIO gml import plugin
-qgisMinimumVersion=3.0
+qgisMinimumVersion=4.0
 description=Imports Omgevingswet GIO xml and/ or gml files in QGIS
-version=0.9.2
+version=0.9.3
 author=Marco Duiker - LandGoed
 email=marco.duiker@landgoed.it
 
@@ -20,11 +20,13 @@ repository=https://github.com/MarcoDuiker/QGIS_GIO_Import
 
 hasProcessingProvider=no
 # Uncomment the following line and add your changelog:
-changelog="0.9.2: improved point, line, polygon detection;
-0.9.1: fixed translation and updated descriptions in metadada;
-0.9: import gio_xml as well and support for styling;
-0.3: fixed import surface as line in some gml;
-0.2: added default GIO styling."
+changelog=
+   0.9.3: (cd) added compatibility for QGIS 4.x and PyQt6; removed pyrcc5 dependency;
+   0.9.2: improved point, line, polygon detection;
+   0.9.1: fixed translation and updated descriptions in metadada;
+   0.9: import gio_xml as well and support for styling;
+   0.3: fixed import surface as line in some gml;
+   0.2: added default GIO styling.
 
 # Tags are comma separated with spaces allowed
 tags=Omgevingswet, GIO, import, gml, xml
